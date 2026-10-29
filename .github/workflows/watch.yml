@@ -1,0 +1,34 @@
+name: PollEv watcher
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # cron is UTC-only with no DST awareness, so each window gets two entries
+    # (PDT and PST offsets); watcher.py itself verifies the real Pacific-time
+    # window and exits immediately if the "wrong" one fires.
+    - cron: "0 18 * * 2,4"  # religion: Tue/Thu 11:00 PDT (UTC-7)
+    - cron: "0 19 * * 2,4"  # religion: Tue/Thu 11:00 PST (UTC-8)
+    - cron: "0 15 * * 1,3"  # donhanna710: Mon/Wed 8:00 PDT (UTC-7)
+    - cron: "0 16 * * 1,3"  # donhanna710: Mon/Wed 8:00 PST (UTC-8)
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run watcher
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          WATCHER_SELFTEST: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+        run: python watcher.py

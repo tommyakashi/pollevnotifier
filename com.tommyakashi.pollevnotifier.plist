@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tommyakashi.pollevnotifier</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/tommyakashi/pollevnotifier/venv/bin/python3</string>
+        <string>/Users/tommyakashi/pollevnotifier/watcher.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/tommyakashi/pollevnotifier</string>
+
+    <!-- Launch only at each window's start time (Weekday: 0/7=Sun, 1=Mon ... 6=Sat). -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict> <!-- religion: Tue 11:00am -->
+            <key>Weekday</key><integer>2</integer>
+            <key>Hour</key><integer>11</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict> <!-- religion: Thu 11:00am -->
+            <key>Weekday</key><integer>4</integer>
+            <key>Hour</key><integer>11</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict> <!-- donhanna710: Mon 8:00am -->
+            <key>Weekday</key><integer>1</integer>
+            <key>Hour</key><integer>8</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict> <!-- donhanna710: Wed 8:00am -->
+            <key>Weekday</key><integer>3</integer>
+            <key>Hour</key><integer>8</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <!-- Restart only if it crashes (nonzero exit); a clean exit (window ended) stays stopped. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tommyakashi/pollevnotifier/logs/watcher.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/tommyakashi/pollevnotifier/logs/watcher.err.log</string>
+</dict>
+</plist>
