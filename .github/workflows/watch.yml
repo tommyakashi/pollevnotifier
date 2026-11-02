@@ -1,7 +1,12 @@
 name: PollEv watcher
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      selftest:
+        description: "Quick one-shot check instead of the full polling loop"
+        type: boolean
+        default: true
   schedule:
     # cron is UTC-only with no DST awareness, so each window gets two entries
     # (PDT and PST offsets); watcher.py itself verifies the real Pacific-time
@@ -30,5 +35,5 @@ jobs:
       - name: Run watcher
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          WATCHER_SELFTEST: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+          WATCHER_SELFTEST: ${{ (github.event_name == 'workflow_dispatch' && inputs.selftest) && '1' || '' }}
         run: python watcher.py
