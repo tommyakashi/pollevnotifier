@@ -99,7 +99,7 @@ def notify(site, text):
         req = urllib.request.Request(
             NTFY_URL,
             data=message.encode("utf-8"),
-            headers={"Title": title, "Priority": "high"},
+            headers={"Title": title, "Priority": "urgent", "Tags": "warning"},
             method="POST",
         )
         urllib.request.urlopen(req, timeout=10)
