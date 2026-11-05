@@ -3,18 +3,30 @@
 
 import os
 import re
+import smtplib
 import sys
 import time
 import urllib.request
 import urllib.error
 import subprocess
 from datetime import datetime
+from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "pollev-f2e7f798f19b0cb4")
 NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
+
+# Backup channel: email-to-SMS gateway (e.g. number@txt.att.net), sent via
+# Gmail SMTP. Independent of ntfy's infrastructure entirely, so a problem on
+# ntfy's end (or its known iOS/Firebase delivery quirks) doesn't take out
+# both channels at once. Every notification goes out on both, unconditionally
+# - there's no way to detect delivery failure from the sending side, so
+# "backup" means "also", not "fallback only if the first fails".
+GMAIL_USER = os.environ.get("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
+SMS_GATEWAY_EMAIL = os.environ.get("SMS_GATEWAY_EMAIL")
 
 TZ = ZoneInfo("America/Los_Angeles")
 
@@ -82,6 +94,23 @@ def check_site(page, site):
     raise RuntimeError(f"status heading never appeared for {site['name']}")
 
 
+def sms_notify(subject, body):
+    if not (GMAIL_USER and GMAIL_APP_PASSWORD and SMS_GATEWAY_EMAIL):
+        log("SMS backup not configured (missing GMAIL_USER/GMAIL_APP_PASSWORD/SMS_GATEWAY_EMAIL); skipping")
+        return
+    msg = MIMEText(body[:140])
+    msg["Subject"] = subject[:30]
+    msg["From"] = GMAIL_USER
+    msg["To"] = SMS_GATEWAY_EMAIL
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as server:
+            server.starttls()
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, [SMS_GATEWAY_EMAIL], msg.as_string())
+    except Exception as e:
+        log(f"SMS backup notification failed: {e}")
+
+
 def notify(site, text):
     title = f"PollEv changed: {site['name']}"
     message = text[:200]
@@ -107,6 +136,8 @@ def notify(site, text):
     except urllib.error.URLError as e:
         log(f"ntfy notification failed: {e}")
 
+    sms_notify(title, message)
+
 
 def notify_failure(reason):
     """Last-resort alert for failures that would otherwise go completely unnoticed:
@@ -125,9 +156,16 @@ def notify_failure(reason):
     except urllib.error.URLError as e:
         log(f"failure-alert itself failed to send: {e}")
 
+    sms_notify("PollEv watcher BROKEN", reason)
+
 
 def main():
     log("Watcher started")
+
+    if os.environ.get("WATCHER_TEST_NOTIFY") == "1":
+        log("WATCHER_TEST_NOTIFY=1: sending a test notification on both channels, then exiting.")
+        notify({"name": "test"}, "This is a test notification from watcher.py - both channels should have delivered this.")
+        return 0
 
     selftest = os.environ.get("WATCHER_SELFTEST") == "1"
 
