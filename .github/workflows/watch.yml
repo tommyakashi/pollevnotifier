@@ -8,7 +8,7 @@ on:
         type: boolean
         default: true
       test_notify:
-        description: "Send one test notification on all channels, then exit (ignores selftest/schedule)"
+        description: "Send one test ntfy notification, then exit (ignores selftest/schedule)"
         type: boolean
         default: false
   schedule:
@@ -49,9 +49,6 @@ jobs:
       - name: Run watcher
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          SMS_GATEWAY_EMAIL: ${{ secrets.SMS_GATEWAY_EMAIL }}
           WATCHER_SELFTEST: ${{ (github.event_name == 'workflow_dispatch' && inputs.selftest) && '1' || '' }}
           WATCHER_TEST_NOTIFY: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_notify) && '1' || '' }}
         run: python watcher.py
