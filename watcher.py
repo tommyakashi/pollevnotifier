@@ -25,14 +25,14 @@ SITES = [
         "url": "https://pollev.com/religion",
         "days": {1, 3},  # Tue, Thu
         "start": (11, 0),
-        "end": (12, 30),
+        "end": (12, 40),
     },
     {
         "name": "donhanna710",
         "url": "https://pollev.com/donhanna710",
         "days": {0, 2},  # Mon, Wed
         "start": (8, 0),
-        "end": (9, 30),
+        "end": (9, 40),
     },
 ]
 
