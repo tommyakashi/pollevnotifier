@@ -9,13 +9,19 @@
 //   1. Project Settings -> set time zone to America/Los_Angeles (so atHour()
 //      below means Pacific time year-round, DST handled automatically).
 //   2. Project Settings -> Script Properties -> add GH_TOKEN = <fine-grained
-//      PAT scoped to just this repo, Actions: Read and write>.
+//      PAT scoped to just this repo, Actions: Read and write>. Fine-grained
+//      tokens must have an expiration (max 1 year) - pick the longest option
+//      and put a reminder on the calendar before it, since an expired token
+//      means this whole mechanism silently stops (the notifyFailure() below
+//      only helps if the token is still valid enough to hit GitHub at all -
+//      an expired token gets a 401 from GitHub itself, which DOES notify).
 //   3. Run installTriggers() once (via the function dropdown + Run button).
-//   4. Approve the authorization prompt (this script only calls out to
-//      api.github.com, nothing else).
+//   4. Approve the authorization prompt (this script calls out to
+//      api.github.com and ntfy.sh, nothing else).
 
 const REPO = 'tommyakashi/pollevnotifier';
 const WORKFLOW_FILE = 'watch.yml';
+const NTFY_TOPIC = 'pollev-f2e7f798f19b0cb4'; // same topic watcher.py notifies on
 
 function triggerPollEvWatch() {
   const token = PropertiesService.getScriptProperties().getProperty('GH_TOKEN');
@@ -33,8 +39,37 @@ function triggerPollEvWatch() {
     muteHttpExceptions: true,
   };
 
-  const response = UrlFetchApp.fetch(url, options);
-  console.log(response.getResponseCode(), response.getContentText());
+  let response;
+  try {
+    response = UrlFetchApp.fetch(url, options);
+  } catch (e) {
+    notifyFailure(`Could not reach GitHub at all: ${e}`);
+    return;
+  }
+
+  const code = response.getResponseCode();
+  console.log(code, response.getContentText());
+
+  // A silent failure here (bad/expired token, wrong permissions, GitHub API
+  // trouble) would recreate the exact bug this script replaced, so any
+  // non-2xx response gets pushed to the phone instead of just logged.
+  if (code < 200 || code >= 300) {
+    notifyFailure(`GitHub dispatch failed (HTTP ${code}): ${response.getContentText()}`);
+  }
+}
+
+function notifyFailure(message) {
+  console.error(message);
+  try {
+    UrlFetchApp.fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+      method: 'post',
+      payload: message.slice(0, 500),
+      headers: { Title: 'PollEv trigger FAILED', Priority: 'urgent', Tags: 'rotating_light' },
+      muteHttpExceptions: true,
+    });
+  } catch (e) {
+    console.error('ntfy failure-notify also failed: ' + e);
+  }
 }
 
 function installTriggers() {
