@@ -47,3 +47,17 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           WATCHER_SELFTEST: ${{ (github.event_name == 'workflow_dispatch' && inputs.selftest) && '1' || '' }}
         run: python watcher.py
+
+      # Catches failures in the steps ABOVE too (e.g. playwright install
+      # breaking on a runner image update) - those happen before watcher.py
+      # even runs, so its own in-script alerting can't see them.
+      - name: Alert on job failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          curl -s -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+            -H "Title: PollEv watcher JOB FAILED" \
+            -H "Priority: urgent" \
+            -H "Tags: rotating_light" \
+            -d "Run failed before/during watcher.py - check GitHub Actions run ${{ github.run_id }}"

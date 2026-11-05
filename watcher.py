@@ -39,6 +39,7 @@ SITES = [
 POLL_INTERVAL_ACTIVE = 15  # seconds between checks while inside a scheduled window
 NAV_TIMEOUT_MS = 20000
 STATUS_WAIT_TIMEOUT_S = 15  # how long to wait for the real status text to settle after load
+CONSECUTIVE_FAILURE_ALERT_THRESHOLD = 8  # ~2 min of back-to-back failures looks like a real break, not a blip
 
 WAITING_PATTERN = re.compile(r"waiting for.*presentation to begin", re.IGNORECASE)
 
@@ -107,6 +108,24 @@ def notify(site, text):
         log(f"ntfy notification failed: {e}")
 
 
+def notify_failure(reason):
+    """Last-resort alert for failures that would otherwise go completely unnoticed:
+    repeated check_site() failures (site markup/WAF changed) or any unexpected
+    crash. A failure to even send this alert still propagates (the workflow's
+    own failure/job-level alert step is the final backstop)."""
+    log(f"ALERTING ON FAILURE: {reason}")
+    try:
+        req = urllib.request.Request(
+            NTFY_URL,
+            data=reason[:300].encode("utf-8"),
+            headers={"Title": "PollEv watcher BROKEN", "Priority": "urgent", "Tags": "rotating_light"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except urllib.error.URLError as e:
+        log(f"failure-alert itself failed to send: {e}")
+
+
 def main():
     log("Watcher started")
 
@@ -135,6 +154,8 @@ def main():
         return 0
 
     notified = {site["name"]: False for site in SITES}
+    consecutive_failures = {site["name"]: 0 for site in SITES}
+    failure_alerted = {site["name"]: False for site in SITES}
     names = ", ".join(s["name"] for s in active_sites)
     log(f"Entering scheduled window for: {names} (checking every {POLL_INTERVAL_ACTIVE}s)")
 
@@ -154,7 +175,19 @@ def main():
                         text = check_site(page, site)
                     except Exception as e:
                         log(f"{site['name']}: check failed ({e})")
+                        consecutive_failures[site["name"]] += 1
+                        if (
+                            consecutive_failures[site["name"]] >= CONSECUTIVE_FAILURE_ALERT_THRESHOLD
+                            and not failure_alerted[site["name"]]
+                        ):
+                            notify_failure(
+                                f"{site['name']}: {consecutive_failures[site['name']]} checks in a row failed "
+                                f"({e}). The page may have changed, or something's blocking it - "
+                                f"it may not be able to notify you even if the poll opens."
+                            )
+                            failure_alerted[site["name"]] = True
                         continue
+                    consecutive_failures[site["name"]] = 0
 
                     if WAITING_PATTERN.search(text):
                         if notified[site["name"]]:
@@ -178,4 +211,13 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        exit_code = main()
+    except Exception as e:
+        # Anything that escapes main() (browser launch failure, etc.) would
+        # otherwise just fail the GitHub Actions job with no alert to the
+        # phone. The workflow's own failure-handler step is the final
+        # backstop if even this fails to send.
+        notify_failure(f"watcher crashed: {e}")
+        raise
+    sys.exit(exit_code)
